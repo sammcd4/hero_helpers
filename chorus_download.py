@@ -20,10 +20,13 @@ logger.setLevel(logging.DEBUG)
 console_handler = logging.StreamHandler()
 logger.addHandler(console_handler)
 
-def find_song_in_directories(song_name, directories, charter_verification):
-    # Extract artist and name from the .sng file name format "<Artist> - <Name> (<Charter>).sng"
-    match = re.match(r"(.+?) - (.+?) \((.+?)\)\.sng", song_name)
+def find_song_in_directories(song_filepath, directories, charter_verification):
+    song_name = os.path.basename(song_filepath)
+
+    # Extract artist, name, and charter from the .sng file name format "<Artist> - <Name> (<Charter>) (N).sng"
+    match = re.match(r"(.+?) - (.+?) \((.+?)\)(?: \(\d+\))?\.sng", song_name)
     if not match:
+        logger.debug(f'No regular expression match for {song_filepath}')
         return False  # If the filename doesn't match the expected format, return False
 
     artist, name, charter = match.groups()
@@ -31,16 +34,16 @@ def find_song_in_directories(song_name, directories, charter_verification):
     for directory in directories:
         for root, dirs, files in os.walk(directory):
 
-            # if 'Currents - A Flag To Wave (iGoWumbo)' in song_name:
-
-            #     logger.debug(f'Walking Directory: {directory}')
-            #     logger.debug(f'For {song_name}')
-            #     logger.debug('All files to search:')
-            #     logger.debug(files)
-            #     logger.debug('All directories to search:')
-            #     logger.debug(dirs)
-            #     return False
+            # Skip any files that are exactly the filepath being compared with
+            found_exact_filepath = False
+            for file in files:
+                # Skip if the current file matches the input song filepath
+                if os.path.abspath(os.path.join(root, file)) == os.path.abspath(song_filepath):
+                    found_exact_filepath = True
             
+            if found_exact_filepath:
+                continue
+
             if song_name in files:
                 # Check for exact matching .sng files
                 logger.debug(f'Walking Directory: {directory}')
@@ -78,7 +81,7 @@ def find_song_in_directories(song_name, directories, charter_verification):
                                 logger.info(f'Found duplicate song folder containing similar name: {ini_name}, artist: {ini_artist}, charter: {ini_charter}')
                                 return True  # Duplicate found
                         except:
-                            logger.debug(f"UnicodeDecodeError reading {song_ini_path}; skipping.")
+                            logger.debug(f"UnicodeDecodeError reading {song_ini_path}; Attempting additional charter verification methods...")
                             
                             # Attempt verification using charter_verification
                             charter_config = charter_verification.get(charter, {})
@@ -86,10 +89,17 @@ def find_song_in_directories(song_name, directories, charter_verification):
 
                             # Check if the directory name matches the expected substring for this charter
                             if parent_dir_substring and parent_dir_substring in os.path.join(root, dir_name):
-                                logging.info(f"Alternate verification successful for {song_name} with charter {charter}.")
+                                logging.info(f"parent_dir_substring charter verification successful for {song_name} with charter {charter}.")
                                 return True
                             else:
-                                logging.error(f'Need to implement another alternate charter verification method for {dir_name}')
+                                logging.debug(f'parent_dir_substring charter verification failed for {dir_name}')
+
+                            # Check if the charter name exists in the directory (it should if properly named)
+                            if charter in dir_name:
+                                logging.info(f"charter in dir_name verification successful for {song_name} with charter {charter}.")
+                                return True
+                            else:
+                                logging.error(f'Need to implement another alternate charter verification method for {dir_name}. {charter} not found!')
 
     return False
 
@@ -104,7 +114,8 @@ def remove_duplicates(directory, song_directories, charter_verification):
             file_size = os.path.getsize(file_path)
 
             # Check if song already exists in song directories
-            if find_song_in_directories(base_name, song_directories, charter_verification):
+            sng_filepath = os.path.join(directory, filename)
+            if find_song_in_directories(sng_filepath, song_directories, charter_verification):
                 logger.info(f"{filename} already exists in song library. Removing.")
                 os.remove(file_path)
                 continue
@@ -146,6 +157,10 @@ def move_sng_files(chorus_download_path, dest_song_directory):
             src_path = os.path.join(chorus_download_path, filename)
             dest_path = os.path.join(dest_song_directory, filename)
 
+            if src_path == dest_path:
+                logger.debug(f'Skipping mv of {src_path} TO {dest_path} because same file!')
+                continue
+
             if os.path.exists(dest_path):
                 logger.warning(f'Missed duplicate .sng file check. Abort move and removing {src_path}')
                 os.remove(src_path)
@@ -176,6 +191,7 @@ def main():
     parser.add_argument('--album', type=str, help="Search by Album.")
     parser.add_argument('--genre', type=str, help="Filter by Genre.")
     parser.add_argument('--year', type=str, help="Filter by Year.")
+    parser.add_argument('--check_duplicates', type=str, help="Folder to rescan for duplicates")
     # parser.add_argument('--skip-download', type=bool, help="Skip download step", default=False)
     parser.add_argument('--skip-download', action=argparse.BooleanOptionalAction)
 
@@ -215,8 +231,23 @@ def main():
         # Load the JSON data into a Python dictionary
         config = json.load(f)
 
+    minor_sleep = config['minor_sleep_val']
+    download_sleep = config['download_check_sleep_val']
+    song_directories = config['song_directories']
+    charter_verification = config.get("charter_verification", {})
+
+    base_download_path = config['base_download_path']
+
+    if args.check_duplicates:
+        skip_download = True
+        download_folder = args.check_duplicates
+        dest_folder = args.check_duplicates
+        base_download_path = os.path.join(song_directories[config['dest_song_directory_idx']], 'Chorus')
+
+    dest_song_directory = os.path.join(song_directories[config['dest_song_directory_idx']], 'Chorus', dest_folder)
+
     # Configuration
-    chorus_download_path = os.path.expanduser(os.path.join(config['base_download_path'], download_folder))
+    chorus_download_path = os.path.expanduser(os.path.join(base_download_path, download_folder))
 
     # Create download directory if it doesn't exist
     if not os.path.exists(chorus_download_path):
@@ -235,11 +266,7 @@ def main():
     # Initialize WebDriver with Chrome options
     driver = webdriver.Chrome(options=chrome_options)
 
-    minor_sleep = config['minor_sleep_val']
-    download_sleep = config['download_check_sleep_val']
-    song_directories = config['song_directories']
-    charter_verification = config.get("charter_verification", {})
-    dest_song_directory = os.path.join(song_directories[config['dest_song_directory_idx']], 'Chorus', dest_folder)
+
 
     # Helper function to locate and fill fields in advanced search
     def fill_search_field(driver, placeholder, value):
@@ -361,7 +388,10 @@ def main():
 
     # Keep only unique files
     remove_duplicates(chorus_download_path, song_directories, charter_verification)
-    move_sng_files(chorus_download_path, dest_song_directory)
+
+    # only move files when initially downloading and not checking duplicates
+    if not args.check_duplicates:
+        move_sng_files(chorus_download_path, dest_song_directory)
 
     def remove_if_empty(dir_path):
         """Removes the directory if it is empty."""
@@ -385,6 +415,7 @@ def main():
     # TODO permission denied: /Volumes/Crucial X8 error handling
     # TODO Log that no files to check if folder empty
     # TODO parallelize the download and sorting of songs into Clone Hero Extra folder (including duplication checking)
-
+    # TODO Ensure that artist name is actually searched before downloading a bunch of unmatched songs
+    
 if __name__ == "__main__":
     main()
