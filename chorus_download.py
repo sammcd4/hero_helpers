@@ -20,7 +20,8 @@ logger.setLevel(logging.DEBUG)
 console_handler = logging.StreamHandler()
 logger.addHandler(console_handler)
 
-def find_song_in_directories(song_filepath, directories, charter_verification):
+# TODO Extend capability to folder song structure, not just .sng files as the file to keep
+def find_duplicates_of_sng_in_library(song_filepath, directories, charter_verification):
     song_name = os.path.basename(song_filepath)
 
     # Extract artist, name, and charter from the .sng file name format "<Artist> - <Name> (<Charter>) (N).sng"
@@ -115,7 +116,7 @@ def remove_duplicates(directory, song_directories, charter_verification):
 
             # Check if song already exists in song directories
             sng_filepath = os.path.join(directory, filename)
-            if find_song_in_directories(sng_filepath, song_directories, charter_verification):
+            if find_duplicates_of_sng_in_library(sng_filepath, song_directories, charter_verification):
                 logger.info(f"{filename} already exists in song library. Removing.")
                 os.remove(file_path)
                 continue
@@ -416,6 +417,10 @@ def main():
     # TODO Log that no files to check if folder empty
     # TODO parallelize the download and sorting of songs into Clone Hero Extra folder (including duplication checking)
     # TODO Ensure that artist name is actually searched before downloading a bunch of unmatched songs
+    # TODO Display name of downloaded song rather than number index
+    # TODO Mv to another folder when Artist doesn't match exactly. Overall, handle all those cases
+    # TODO Mechanism to provide priority to newly added packs outside of Chorus artist and remove duplicate Chorus artist downloaded .sng files
+    # TODO General mechanism to search for and choose priority when duplicate sng identified
     
 if __name__ == "__main__":
     main()
