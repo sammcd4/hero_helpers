@@ -104,7 +104,7 @@ def find_duplicates_of_sng_in_library(song_filepath, directories, charter_verifi
 
     return False
 
-def remove_duplicates(directory, song_directories, charter_verification):
+def remove_duplicates(directory, song_directories, charter_verification, dry_run=False):
     files_dict = {}
 
     for filename in os.listdir(directory):
@@ -117,8 +117,12 @@ def remove_duplicates(directory, song_directories, charter_verification):
             # Check if song already exists in song directories
             sng_filepath = os.path.join(directory, filename)
             if find_duplicates_of_sng_in_library(sng_filepath, song_directories, charter_verification):
-                logger.info(f"{filename} already exists in song library. Removing.")
-                os.remove(file_path)
+                if not dry_run:
+                    logger.info(f"{filename} already exists in song library. Removing.")
+                    os.remove(file_path)
+                else: 
+                    logger.info(f"DRY-RUN: {filename} already exists in song library. Removing.")
+
                 continue
 
             # If base name already exists, compare sizes and suffix
@@ -193,8 +197,8 @@ def main():
     parser.add_argument('--genre', type=str, help="Filter by Genre.")
     parser.add_argument('--year', type=str, help="Filter by Year.")
     parser.add_argument('--check_duplicates', type=str, help="Folder to rescan for duplicates")
-    # parser.add_argument('--skip-download', type=bool, help="Skip download step", default=False)
     parser.add_argument('--skip-download', action=argparse.BooleanOptionalAction)
+    parser.add_argument('--dry-run', action=argparse.BooleanOptionalAction)
 
     # Define a helper function to append argument values
     def append_to_folder(folder, value):
@@ -226,6 +230,7 @@ def main():
             download_folder = append_to_folder(download_folder, args.year)
 
     skip_download = args.skip_download
+    dry_run = args.dry_run
 
     # Open the JSON file
     with open('chorus_config.json', 'r') as f:
@@ -349,8 +354,11 @@ def main():
 
             # Iterate over each download button
             for index, button in enumerate(download_buttons, start=1):
-                button.click()  # Click the download button to open the format selection dialog
-                logger.debug(f"Clicked download button for file {index}")
+                if not dry_run:
+                    button.click()  # Click the download button to open the format selection dialog
+                    logger.debug(f"Clicked download button for file {index}")
+                else:
+                    logger.debug(f"DRY-RUN: Clicked download button for file {index}")
 
                 # If the .sng format hasn't been selected yet, select it
                 if not sng_selected:
@@ -367,8 +375,11 @@ def main():
                         download_button = WebDriverWait(driver, 10).until(
                             EC.element_to_be_clickable((By.XPATH, "//button[@class='btn btn-primary' and text()='Download']"))
                         )
-                        download_button.click()
-                        logger.debug("Clicked Download button to start download.")
+                        if not dry_run:
+                            download_button.click()
+                            logger.debug("Clicked Download button to start download.")
+                        else:
+                            logger.debug("DRY RUN: Clicked Download button to start download.")
 
                     except Exception as e:
                         logger.error(f"Error selecting .sng format: {e}")
@@ -388,7 +399,7 @@ def main():
         perform_download()
 
     # Keep only unique files
-    remove_duplicates(chorus_download_path, song_directories, charter_verification)
+    remove_duplicates(chorus_download_path, song_directories, charter_verification, dry_run)
 
     # only move files when initially downloading and not checking duplicates
     if not args.check_duplicates:
@@ -421,6 +432,8 @@ def main():
     # TODO Mv to another folder when Artist doesn't match exactly. Overall, handle all those cases
     # TODO Mechanism to provide priority to newly added packs outside of Chorus artist and remove duplicate Chorus artist downloaded .sng files
     # TODO General mechanism to search for and choose priority when duplicate sng identified
+    # TODO Tests to run prior to test functionality of the website again (in case html has changed)
+    # TODO print help
     
 if __name__ == "__main__":
     main()
