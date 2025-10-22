@@ -179,9 +179,9 @@ def move_sng_files(chorus_download_path, dest_song_directory):
 
     if aborted_count == 0:
         if mv_count > 0:
-            logger.info("All .sng files have been moved successfully.")
+            logger.info("\nAll .sng files have been moved successfully.")
         else:
-            logger.info("No new songs found. None have been moved.")
+            logger.info("\nNo new songs found. None have been moved.")
     else:
         logger.warning(f'{mv_count} .sng files have been moved. {aborted_count} aborted to avoid overwriting existing files')
 
