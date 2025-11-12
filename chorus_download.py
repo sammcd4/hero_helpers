@@ -418,22 +418,31 @@ def main():
     # Cleanup the download directory
     remove_if_empty(chorus_download_path)
 
-    # TODO Ensure that I don't default to only Expert files in case there are some with full difficulty that I should download instead.
+    # High priority:
+    # TODO Only log/print which newly moved songs were added rather than notifying of duplicates that were skipped
     # TODO Cleanup global variables and execute main
-    # TODO Add tests? not so necessary but could help while iterating and adding functionality.
     # TODO Display percent complete of the downloading
     # TODO Display percent complete of duplicate song checking
+    # TODO Ensure that artist name is actually searched before downloading a bunch of unmatched songs
+    # TODO logging rather than print statements
+    
+    # Medium priority:
+    # TODO Mv to another folder when Artist doesn't match exactly. Overall, handle all those cases
     # TODO (Believed to be fixed) Fix .sng duplicate file check because abort should not have to happen! Risk is there are hidden .sng duplicates other than in the Chorus directory!
+    # TODO parallelize the download and sorting of songs into Clone Hero Extra folder (including duplication checking)
+    # TODO Display name of downloaded song rather than number index
+    # TODO Ensure that I don't default to only Expert files in case there are some with full difficulty that I should download instead.
+    # TODO Add tests? not so necessary but could help while iterating and adding functionality.
     # TODO permission denied: /Volumes/Crucial X8 error handling
     # TODO Log that no files to check if folder empty
-    # TODO parallelize the download and sorting of songs into Clone Hero Extra folder (including duplication checking)
-    # TODO Ensure that artist name is actually searched before downloading a bunch of unmatched songs
-    # TODO Display name of downloaded song rather than number index
-    # TODO Mv to another folder when Artist doesn't match exactly. Overall, handle all those cases
     # TODO Mechanism to provide priority to newly added packs outside of Chorus artist and remove duplicate Chorus artist downloaded .sng files
     # TODO General mechanism to search for and choose priority when duplicate sng identified
     # TODO Tests to run prior to test functionality of the website again (in case html has changed)
     # TODO print help
+    # TODO configurable logging levels
+
+    # Low priority:
+    # TODO optional replacement of .sng files with folder structure (document reasons I would want to do this)
     
 if __name__ == "__main__":
     main()

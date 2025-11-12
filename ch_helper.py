@@ -57,8 +57,15 @@ def archive_files(file_list):
         bak_path = file_path + ".bak"
         bak_img_path = file_path + ".bak" + os.path.splitext(file_path)[1]
         if os.path.exists(file_path):
-            if not os.access(file_path, os.W_OK):
-                os.chmod(file_path, stat.S_IWUSR)
+            dirpath = os.path.dirname(file_path)
+            # ensure directory writable (rename needs directory write permission)
+            try:
+                if not os.access(dirpath, os.W_OK):
+                    st = os.stat(dirpath)
+                    os.chmod(dirpath, st.st_mode | stat.S_IWUSR)
+            except PermissionError:
+                print(f"Cannot make directory writable: {dirpath} (need sudo)")
+                raise
             if not os.path.exists(bak_path) and not os.path.exists(bak_img_path):
                 os.rename(file_path, bak_path)
                 print(f"Archived: {file_path} -> {bak_path}")
@@ -127,9 +134,9 @@ def unarchive_files(file_list):
 
 def main():
     parser = argparse.ArgumentParser(description="Archive/unarchive album artwork files.")
-    parser.add_argument("--archive-album-artwork", action="store_true", help="Archive album artwork files")
-    parser.add_argument("--unarchive-album-artwork", action="store_true", help="Restore archived album artwork files")
-    parser.add_argument("--album-artwork-search", action="store_true", help="Recursively search configured song directories for matching album artwork")
+    parser.add_argument("-a", "--archive-album-artwork", action="store_true", help="Archive album artwork files")
+    parser.add_argument("-u", "--unarchive-album-artwork", action="store_true", help="Restore archived album artwork files")
+    parser.add_argument("-s", "--album-artwork-search", action="store_true", help="Recursively search configured song directories for matching album artwork")
     args = parser.parse_args()
 
     with open(CONFIG_FILE, "r") as f:
