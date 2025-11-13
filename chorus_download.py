@@ -118,10 +118,10 @@ def remove_duplicates(directory, song_directories, charter_verification, dry_run
             sng_filepath = os.path.join(directory, filename)
             if find_duplicates_of_sng_in_library(sng_filepath, song_directories, charter_verification):
                 if not dry_run:
-                    logger.info(f"{filename} already exists in song library. Removing.")
+                    logger.info(f"{filename} already exists in song library. Removing from Downloads directory.")
                     os.remove(file_path)
                 else: 
-                    logger.info(f"DRY-RUN: {filename} already exists in song library. Removing.")
+                    logger.info(f"DRY-RUN: {filename} already exists in song library. Removing from Downloads directory.")
 
                 continue
 
