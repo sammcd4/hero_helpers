@@ -53,85 +53,166 @@ def album_artwork_search(file_list, search_dirs):
         print("No new album artwork files found.")
 
 def archive_files(file_list):
-    for file_path in file_list:
-        # Archive album image (png or jpg)
-        bak_path = file_path + ".bak"
-        bak_img_path = file_path + ".bak" + os.path.splitext(file_path)[1]
-        if os.path.exists(file_path):
-            dirpath = os.path.dirname(file_path)
-            # ensure directory writable (rename needs directory write permission)
-            try:
-                if not os.access(dirpath, os.W_OK):
-                    st = os.stat(dirpath)
-                    os.chmod(dirpath, st.st_mode | stat.S_IWUSR)
-            except PermissionError:
-                print(f"Cannot make directory writable: {dirpath} (need sudo)")
-                raise
-            if not os.path.exists(bak_path) and not os.path.exists(bak_img_path):
-                os.rename(file_path, bak_path)
-                print(f"Archived: {file_path} -> {bak_path}")
-            else:
-                print(f"Already archived: {bak_path} or {bak_img_path}")
+    """Two-phase archive: preflight validations then perform renames."""
+    ops = []               # list of (src, dst)
+    conflicts = []         # src paths where both src and bak exist
+    missing = []           # src paths where neither src nor bak exist
 
-        # Archive background image (png or jpg) in the same directory, if it exists
-        for ext in [".png", ".jpg"]:
-            background_path = os.path.join(os.path.dirname(file_path), f"background{ext}")
-            background_bak_path = background_path + ".bak"
-            background_bak_img_path = background_path + ".bak" + ext
-            if os.path.exists(background_path):
-                if not os.access(background_path, os.W_OK):
-                    os.chmod(background_path, stat.S_IWUSR)
-                if not os.path.exists(background_bak_path) and not os.path.exists(background_bak_img_path):
-                    os.rename(background_path, background_bak_path)
-                    print(f"Archived: {background_path} -> {background_bak_path}")
-                else:
-                    print(f"Already archived: {background_bak_path} or {background_bak_img_path}")
+    for file_path in file_list:
+        ext = os.path.splitext(file_path)[1]
+        bak1 = file_path + ".bak"
+        bak2 = file_path + ".bak" + ext
+
+        src_exists = os.path.exists(file_path)
+        bak_exists = os.path.exists(bak1) or os.path.exists(bak2)
+
+        # conflict if both present (ambiguous state)
+        if src_exists and bak_exists:
+            conflicts.append(file_path)
+            continue
+
+        # schedule archive if original exists and no bak present
+        if src_exists and not bak_exists:
+            ops.append((file_path, bak1))
+
+        # if neither exist, note it
+        if not src_exists and not bak_exists:
+            missing.append(file_path)
+
+        # also consider background images (both png/jpg)
+        for bext in [".png", ".jpg"]:
+            background = os.path.join(os.path.dirname(file_path), f"background{bext}")
+            background_bak1 = background + ".bak"
+            background_bak2 = background + ".bak" + bext
+            b_exists = os.path.exists(background)
+            bb_exists = os.path.exists(background_bak1) or os.path.exists(background_bak2)
+            if b_exists and bb_exists:
+                conflicts.append(background)
+            elif b_exists and not bb_exists:
+                ops.append((background, background_bak1))
+            elif not b_exists and not bb_exists:
+                # nothing present, that's fine — don't treat as error here
+                pass
+
+    if conflicts:
+        print("Aborting: found conflicting items (both original and .bak exist):")
+        for p in conflicts:
+            print("  ", p)
+        print("Resolve these manually or run with a --force option (not implemented).")
+        return
+
+    if not ops:
+        print("Nothing to archive (all items already archived or missing).")
+        if missing:
+            print("Missing originals (no archive present either):")
+            for p in missing:
+                print("  ", p)
+        return
+
+    # verify directories writable before performing any rename
+    for src, dst in ops:
+        dirpath = os.path.dirname(src)
+        try:
+            if not os.access(dirpath, os.W_OK):
+                st = os.stat(dirpath)
+                os.chmod(dirpath, st.st_mode | stat.S_IWUSR)
+        except PermissionError:
+            print(f"Cannot make directory writable: {dirpath} (need sudo). Aborting.")
+            return
+
+    # perform renames
+    for src, dst in ops:
+        try:
+            if not os.path.exists(dst):  # double-check
+                os.rename(src, dst)
+                print(f"Archived: {src} -> {dst}")
+            else:
+                print(f"Skipped (destination exists): {dst}")
+        except Exception as e:
+            print(f"Failed to archive {src} -> {dst}: {e}")
+            print("Aborting further operations to avoid mixed state.")
+            return
 
 def unarchive_files(file_list):
-    for file_path in file_list:
-        # Unarchive album image (png or jpg)
-        bak_path = file_path + ".bak"
-        bak_img_path = file_path + ".bak" + os.path.splitext(file_path)[1]
-        if os.path.exists(bak_path):
-            if not os.access(bak_path, os.W_OK):
-                os.chmod(bak_path, stat.S_IWUSR)
-            if not os.path.exists(file_path):
-                os.rename(bak_path, file_path)
-                print(f"Restored: {bak_path} -> {file_path}")
-            else:
-                print(f"Original already exists, skipping restore: {file_path}")
-        elif os.path.exists(bak_img_path):
-            if not os.access(bak_img_path, os.W_OK):
-                os.chmod(bak_img_path, stat.S_IWUSR)
-            if not os.path.exists(file_path):
-                os.rename(bak_img_path, file_path)
-                print(f"Restored: {bak_img_path} -> {file_path}")
-            else:
-                print(f"Original already exists, skipping restore: {file_path}")
-        else:
-            print(f"No archive to restore: {bak_path} or {bak_img_path}")
+    """Two-phase unarchive: preflight then perform restores."""
+    ops = []               # list of (bak_path, original_path)
+    conflicts = []
+    missing = []
 
-        # Unarchive background image (png or jpg) in the same directory, if it exists
-        for ext in [".png", ".jpg"]:
-            background_path = os.path.join(os.path.dirname(file_path), f"background{ext}")
-            background_bak_path = background_path + ".bak"
-            background_bak_img_path = background_path + ".bak" + ext
-            if os.path.exists(background_bak_path):
-                if not os.access(background_bak_path, os.W_OK):
-                    os.chmod(background_bak_path, stat.S_IWUSR)
-                if not os.path.exists(background_path):
-                    os.rename(background_bak_path, background_path)
-                    print(f"Restored: {background_bak_path} -> {background_path}")
-                else:
-                    print(f"Original already exists, skipping restore: {background_path}")
-            elif os.path.exists(background_bak_img_path):
-                if not os.access(background_bak_img_path, os.W_OK):
-                    os.chmod(background_bak_img_path, stat.S_IWUSR)
-                if not os.path.exists(background_path):
-                    os.rename(background_bak_img_path, background_path)
-                    print(f"Restored: {background_bak_img_path} -> {background_path}")
-                else:
-                    print(f"Original already exists, skipping restore: {background_path}")
+    for file_path in file_list:
+        ext = os.path.splitext(file_path)[1]
+        bak1 = file_path + ".bak"
+        bak2 = file_path + ".bak" + ext
+
+        src_exists = os.path.exists(file_path)
+        bak_exists = os.path.exists(bak1) or os.path.exists(bak2)
+
+        # conflict if both bak and original exist (ambiguous)
+        if src_exists and bak_exists:
+            conflicts.append(file_path)
+            continue
+
+        # schedule restore if bak exists and original missing
+        if bak_exists and not src_exists:
+            # prefer simple bak (bak1) if present, else bak2
+            chosen = bak1 if os.path.exists(bak1) else bak2
+            ops.append((chosen, file_path))
+
+        # if neither exist, note it
+        if not src_exists and not bak_exists:
+            missing.append(file_path)
+
+        # also handle background files (png/jpg)
+        for bext in [".png", ".jpg"]:
+            background = os.path.join(os.path.dirname(file_path), f"background{bext}")
+            background_bak1 = background + ".bak"
+            background_bak2 = background + ".bak" + bext
+            b_exists = os.path.exists(background)
+            bb_exists = os.path.exists(background_bak1) or os.path.exists(background_bak2)
+            if b_exists and bb_exists:
+                conflicts.append(background)
+            elif bb_exists and not b_exists:
+                chosen_bb = background_bak1 if os.path.exists(background_bak1) else background_bak2
+                ops.append((chosen_bb, background))
+
+    if conflicts:
+        print("Aborting: found conflicting items (both original and .bak exist):")
+        for p in conflicts:
+            print("  ", p)
+        print("Resolve these manually or run with a --force option (not implemented).")
+        return
+
+    if not ops:
+        print("Nothing to restore (all items already unarchived or missing).")
+        if missing:
+            print("Missing archives (no .bak present either):")
+            for p in missing:
+                print("  ", p)
+        return
+
+    # verify directories writable before performing any rename
+    for bak, orig in ops:
+        dirpath = os.path.dirname(orig)
+        try:
+            if not os.access(dirpath, os.W_OK):
+                st = os.stat(dirpath)
+                os.chmod(dirpath, st.st_mode | stat.S_IWUSR)
+        except PermissionError:
+            print(f"Cannot make directory writable: {dirpath} (need sudo). Aborting.")
+            return
+
+    # perform restores
+    for bak, orig in ops:
+        try:
+            if os.path.exists(bak) and not os.path.exists(orig):
+                os.rename(bak, orig)
+                print(f"Restored: {bak} -> {orig}")
+            else:
+                print(f"Skipped restore (conditions not met): {bak} -> {orig}")
+        except Exception as e:
+            print(f"Failed to restore {bak} -> {orig}: {e}")
+            print("Aborting further operations to avoid mixed state.")
+            return
 
 def archive_charts_with_language(chart_dirs):
     """Rename notes.chart -> notes.chart.bak.lang for each directory in chart_dirs."""
