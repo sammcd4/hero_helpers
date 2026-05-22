@@ -230,6 +230,8 @@ def detect_explicit_charts(search_dirs, explicit_words):
     else:
         print("No new explicit chart folders to add.")
 
+
+# TODO Add sensoring mechanism to hide songs that contain explicit language in the title when inside the game. (not sure if can do this with just file operations. Clone Hero manages it's own song catalog)
 def main():
     parser = argparse.ArgumentParser(description="Archive/unarchive album artwork files.")
     parser.add_argument("-aa", "--archive-album-artwork", action="store_true", help="Archive album artwork files")
