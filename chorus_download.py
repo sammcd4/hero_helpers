@@ -106,6 +106,13 @@ def find_duplicates_of_sng_in_library(song_filepath, directories, charter_verifi
 
     return False
 
+def _remove_duplicate_file(file_path, dry_run):
+    if dry_run:
+        logger.info(f"DRY-RUN: would remove duplicate {file_path}")
+    else:
+        logger.debug(f"Removing duplicate {file_path}")
+        os.remove(file_path)
+
 def remove_duplicates(directory, song_directories, charter_verification, dry_run=False):
     files_dict = {}
 
@@ -138,18 +145,18 @@ def remove_duplicates(directory, song_directories, charter_verification, dry_run
 
                 if file_size > existing_file_size:
                     # Keep the current file, remove the previously stored one
-                    os.remove(existing_file_path)
+                    _remove_duplicate_file(existing_file_path, dry_run)
                     files_dict[base_name] = (file_path, file_size)
                 elif file_size == existing_file_size:
                     # If sizes are equal, prefer file without (N) suffix
                     if re.search(r" \(\d+\)\.sng$", filename):
-                        os.remove(file_path)  # Remove current file with suffix
+                        _remove_duplicate_file(file_path, dry_run)  # Remove current file with suffix
                     else:
-                        os.remove(existing_file_path)  # Remove the old file with suffix
+                        _remove_duplicate_file(existing_file_path, dry_run)  # Remove the old file with suffix
                         files_dict[base_name] = (file_path, file_size)
                 else:
                     # Remove the current file since the existing one is larger
-                    os.remove(file_path)
+                    _remove_duplicate_file(file_path, dry_run)
             else:
                 # Store the file as the best version so far
                 files_dict[base_name] = (file_path, file_size)
