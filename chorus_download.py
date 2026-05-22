@@ -20,6 +20,8 @@ logger.setLevel(logging.DEBUG)
 console_handler = logging.StreamHandler()
 logger.addHandler(console_handler)
 
+LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+
 # TODO Extend capability to folder song structure, not just .sng files as the file to keep
 def find_duplicates_of_sng_in_library(song_filepath, directories, charter_verification):
     song_name = os.path.basename(song_filepath)
@@ -107,7 +109,12 @@ def find_duplicates_of_sng_in_library(song_filepath, directories, charter_verifi
 def remove_duplicates(directory, song_directories, charter_verification, dry_run=False):
     files_dict = {}
 
-    for filename in os.listdir(directory):
+    entries = os.listdir(directory)
+    if not entries:
+        logger.info(f"No files to check in {directory}; nothing to deduplicate.")
+        return
+
+    for filename in entries:
         if filename.endswith(".sng"):
             # Get the base name by removing suffixes like (1), (2), etc.
             base_name = re.sub(r" \(\d+\)\.sng$", ".sng", filename)
@@ -199,6 +206,7 @@ def main():
     parser.add_argument('--check_duplicates', type=str, help="Folder to rescan for duplicates")
     parser.add_argument('--skip-download', action=argparse.BooleanOptionalAction)
     parser.add_argument('--dry-run', action=argparse.BooleanOptionalAction)
+    parser.add_argument('--log-level', type=str, default="DEBUG", choices=LOG_LEVELS, help="Logger verbosity (default: DEBUG).")
 
     # Define a helper function to append argument values
     def append_to_folder(folder, value):
@@ -208,6 +216,7 @@ def main():
 
     # Parse arguments
     args = parser.parse_args()
+    logger.setLevel(getattr(logging, args.log_level))
     search_term = args.search_term  # Get the search term from the argument
     download_folder = ""
     dest_folder = ""
@@ -410,10 +419,10 @@ def main():
 
         if os.path.exists(dir_path) and os.path.isdir(dir_path):
             if not os.listdir(dir_path):  # Check if directory is empty
-                os.rmdir(dir_path) 
-                print(f"Directory '{dir_path}' removed.")
+                os.rmdir(dir_path)
+                logger.info(f"Directory '{dir_path}' removed.")
             else:
-                print(f"Directory '{dir_path}' is not empty.")
+                logger.info(f"Directory '{dir_path}' is not empty.")
 
     # Cleanup the download directory
     remove_if_empty(chorus_download_path)
@@ -424,22 +433,17 @@ def main():
     # TODO Display percent complete of the downloading
     # TODO Display percent complete of duplicate song checking
     # TODO Ensure that artist name is actually searched before downloading a bunch of unmatched songs
-    # TODO logging rather than print statements
-    
+
     # Medium priority:
     # TODO Mv to another folder when Artist doesn't match exactly. Overall, handle all those cases
     # TODO (Believed to be fixed) Fix .sng duplicate file check because abort should not have to happen! Risk is there are hidden .sng duplicates other than in the Chorus directory!
     # TODO parallelize the download and sorting of songs into Clone Hero Extra folder (including duplication checking)
     # TODO Display name of downloaded song rather than number index
     # TODO Ensure that I don't default to only Expert files in case there are some with full difficulty that I should download instead.
-    # TODO Add tests? not so necessary but could help while iterating and adding functionality.
     # TODO permission denied: /Volumes/Crucial X8 error handling
-    # TODO Log that no files to check if folder empty
     # TODO Mechanism to provide priority to newly added packs outside of Chorus artist and remove duplicate Chorus artist downloaded .sng files
     # TODO General mechanism to search for and choose priority when duplicate sng identified
     # TODO Tests to run prior to test functionality of the website again (in case html has changed)
-    # TODO print help
-    # TODO configurable logging levels
 
     # Low priority:
     # TODO optional replacement of .sng files with folder structure (document reasons I would want to do this)
